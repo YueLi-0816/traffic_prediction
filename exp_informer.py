@@ -144,6 +144,8 @@ class Exp_Informer(Exp_Basic):
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
 
+        training_times = []     # <--- store epoch times
+
         for epoch in range(self.args.train_epochs):
             iter_count = 0
             train_loss = []
@@ -175,6 +177,8 @@ class Exp_Informer(Exp_Basic):
                     loss.backward()
                     model_optim.step()
 
+            train_cost = time.time()-epoch_time      # <--- measure epoch time
+            training_times.append(train_cost)
             print("Epoch: {} cost time: {}".format(epoch+1, time.time()-epoch_time))
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
@@ -191,8 +195,10 @@ class Exp_Informer(Exp_Basic):
             
         best_model_path = path+'/'+'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
+
+        avg_training_time = np.mean(training_times)
         
-        return self.model
+        return self.model, avg_training_time
 
     def test(self, setting):
         test_data, test_loader = self._get_data(flag='test')
@@ -202,12 +208,15 @@ class Exp_Informer(Exp_Basic):
         preds = []
         trues = []
         
+        test_start = time.time()     # <--- start timer
         for i, (batch_x,batch_y,batch_x_mark,batch_y_mark) in enumerate(test_loader):
             pred, true = self._process_one_batch(
                 test_data, batch_x, batch_y, batch_x_mark, batch_y_mark)
             preds.append(pred.detach().cpu().numpy())
             trues.append(true.detach().cpu().numpy())
 
+        test_cost_time = time.time() - test_start   # <--- test time
+        print(f"Test cost time: {test_cost_time:.4f}s")
         preds = np.array(preds)
         trues = np.array(trues)
         print('test shape:', preds.shape, trues.shape)
@@ -227,7 +236,7 @@ class Exp_Informer(Exp_Basic):
         np.save(folder_path+'pred.npy', preds)
         np.save(folder_path+'true.npy', trues)
 
-        return
+        return test_cost_time
 
     def predict(self, setting, load=False):
         pred_data, pred_loader = self._get_data(flag='pred')

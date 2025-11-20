@@ -1,8 +1,10 @@
 import argparse
 import os
 import torch
+import numpy as np
 
 from exp.exp_informer import Exp_Informer
+from inverse_results import Inverse_Results
 
 parser = argparse.ArgumentParser(description='[Informer] Long Sequences Forecasting')
 
@@ -93,6 +95,9 @@ print(args)
 
 Exp = Exp_Informer
 
+all_train_times = []
+all_test_times = []
+
 for ii in range(args.itr):
     # setting record of experiments
     setting = '{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_at{}_fc{}_eb{}_dt{}_mx{}_{}_{}'.format(args.model, args.data, args.features, 
@@ -102,13 +107,33 @@ for ii in range(args.itr):
 
     exp = Exp(args) # set experiments
     print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-    exp.train(setting)
+    saved_model, train_time = exp.train(setting)
+    all_train_times.append(train_time)
     
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    exp.test(setting)
+    test_time = exp.test(setting)
+    all_test_times.append(test_time)
+
+    print('>>>>>>>inverse results : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+    Inverse_Results(setting, args)
 
     if args.do_predict:
         print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.predict(setting, True)
 
     torch.cuda.empty_cache()
+
+# running time save
+folder_path = './results/'
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
+
+avg_train_time_over_iters = float(np.mean(all_train_times))
+avg_test_time_over_iters  = float(np.mean(all_test_times))
+
+file_path = f"./results/running_time_{args.seq_len}.npy"
+
+np.save(file_path,
+        np.array([avg_train_time_over_iters,
+                  avg_test_time_over_iters]))
+print('>>>>>>>Running time saved<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
